@@ -365,6 +365,8 @@
     }
 
     let inventoryData = {};
+    // 新增：品牌顺序数组，解决Object无序问题
+    let brandOrder = [];
     let inventoryImages = {};
     let changeLog = []; 
     let sessionCounts = {};
@@ -500,7 +502,7 @@
     }
 
     function exportLocalConfig() {
-        const config = { inventoryData, inventoryImages, changeLog, exportedAt: new Date().toLocaleString() };
+        const config = { inventoryData, brandOrder, inventoryImages, changeLog, exportedAt: new Date().toLocaleString() };
         const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `盘点配置备份_${new Date().toISOString().slice(0,10)}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -516,6 +518,10 @@
                 if (!config.inventoryData) throw new Error("无效的配置文件格式");
                 showCustomConfirm(`准备导入配置 (导出时间: ${config.exportedAt || '未知'})，这将覆盖当前设置，确定吗？`, () => {
                     inventoryData = config.inventoryData || {};
+                    // 兼容导入
+                    if(config.brandOrder) brandOrder = config.brandOrder;
+                    else brandOrder = Object.keys(inventoryData);
+                    
                     inventoryImages = config.inventoryImages || {};
                     changeLog = config.changeLog || [];
                     currentBaseVersionTime = config.exportedAt || "本地导入";
@@ -541,7 +547,7 @@
     }
     
     function checkAndClose() {
-        const currentHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
+        const currentHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
         if (currentHash !== lastSyncedHash || isHistoryLoaded) {
             const alertBox = document.getElementById('unsavedAlert');
             document.getElementById('alertTitleText').innerText = isHistoryLoaded ? "⚠️ 您加载了历史存档，是否将其保存为最新版本？" : "⚠️ 检测到配置有新的改动，是否保存到云端？";
@@ -566,7 +572,7 @@
                 processRemoteData(data.setting_value);
                 applyDataToApp(remoteFullData.active.data);
                 currentBaseVersionTime = remoteFullData.active.time || "未知版本";
-                lastSyncedHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
+                lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
                 isHistoryLoaded = false;
             }
         } catch (e) { console.error("Auto load failed", e); }
@@ -613,7 +619,6 @@
     async function showVersionSelector() {
         if(!supabaseClient) return showToast("请先配置数据库", "error");
         
-        // UI Reset
         taskAbortFlag = false;
         document.getElementById('versionLoadingState').style.display = 'block';
         document.getElementById('versionListState').style.display = 'none';
@@ -621,7 +626,7 @@
         
         try {
             const { data, error } = await supabaseClient.from('hysl-ckpd-data').select('setting_value').eq('setting_key', 'main_data').single();
-            if (taskAbortFlag) return; // Cancelled
+            if (taskAbortFlag) return;
             if (error) throw error;
             
             processRemoteData(data.setting_value);
@@ -685,7 +690,7 @@
             isHistoryLoaded = true; 
         }
         applyDataToApp(targetData);
-        if (type === 'active') lastSyncedHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
+        if (type === 'active') lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
         document.getElementById('versionSelectModal').style.display = 'none';
         document.getElementById('unsavedAlert').style.display = 'none';
         if(document.getElementById('settingsModal').style.display === 'flex') { renderBrandTags(); if(currentSettingBrand) loadProductsForSetting(); }
@@ -695,6 +700,17 @@
 
     function applyDataToApp(dataObj) {
         if(dataObj.inventoryData) inventoryData = dataObj.inventoryData; else inventoryData = dataObj; 
+        
+        // 关键逻辑：如果云端有顺序，用云端的；如果没有，用 keys 生成
+        if(dataObj.brandOrder && Array.isArray(dataObj.brandOrder)) {
+            brandOrder = dataObj.brandOrder;
+        } else {
+            brandOrder = Object.keys(inventoryData);
+        }
+        // 确保一致性：如果有品牌在 Data 里但不在 Order 里，补上；如果在 Order 里但不在 Data 里，移除
+        brandOrder = brandOrder.filter(b => inventoryData[b] !== undefined);
+        Object.keys(inventoryData).forEach(b => { if(!brandOrder.includes(b)) brandOrder.push(b); });
+
         if(dataObj.inventoryImages) inventoryImages = dataObj.inventoryImages; else inventoryImages = {};
         if (dataObj.changeLog) changeLog = dataObj.changeLog; else changeLog = [];
         renderBrandSelects();
@@ -708,22 +724,21 @@
 
         try {
             const nowTime = new Date().toLocaleString();
-            const newDataPackage = { inventoryData, inventoryImages, changeLog, baseVersionTime: currentBaseVersionTime };
+            // 保存 brandOrder
+            const newDataPackage = { inventoryData, brandOrder, inventoryImages, changeLog, baseVersionTime: currentBaseVersionTime };
             let newHistory = [...remoteFullData.history];
             if (remoteFullData.active) newHistory.unshift(remoteFullData.active);
             if (newHistory.length > 3) newHistory = newHistory.slice(0, 3);
             const finalPayload = { active: { time: nowTime, data: newDataPackage }, history: newHistory };
             
-            // Note: Aborting upsert mid-flight isn't directly supported by Supabase JS simply, 
-            // but we can ignore the result if taskAbortFlag is set.
             const { error } = await supabaseClient.from('hysl-ckpd-data').upsert({ setting_key: 'main_data', setting_value: finalPayload });
             
-            if (taskAbortFlag) return; // User cancelled
+            if (taskAbortFlag) return;
             if (error) throw error;
 
             remoteFullData = finalPayload;
             currentBaseVersionTime = nowTime; 
-            lastSyncedHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
+            lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
             changeLog = []; 
             
             isHistoryLoaded = false; 
@@ -890,14 +905,22 @@
     }
 
     function renderBrandSelects() {
-        const brands = Object.keys(inventoryData);
+        // 使用 brandOrder 来渲染
         const mainSelect = document.getElementById('brandSelect');
         const settingSelect = document.getElementById('settingBrandSelect');
         const currentMainVal = mainSelect.value;
+        
         let optionsHTML = '<option value="">-- 请选择品牌 --</option>';
-        brands.forEach(b => { optionsHTML += `<option value="${b}">${b}</option>`; });
-        mainSelect.innerHTML = optionsHTML; settingSelect.innerHTML = optionsHTML;
-        if(brands.includes(currentMainVal)) mainSelect.value = currentMainVal;
+        // 遍历 brandOrder
+        brandOrder.forEach(b => { 
+            // 双重保险：确保数据里真有这个品牌
+            if(inventoryData[b] !== undefined) optionsHTML += `<option value="${b}">${b}</option>`; 
+        });
+        
+        mainSelect.innerHTML = optionsHTML;
+        settingSelect.innerHTML = optionsHTML;
+        
+        if(brandOrder.includes(currentMainVal)) mainSelect.value = currentMainVal;
         if(document.getElementById('settingsModal').style.display === 'flex') renderBrandTags();
         toggleInventorySection();
     }
@@ -905,12 +928,15 @@
     function renderBrandTags() {
         const container = document.getElementById('brandTags');
         container.innerHTML = '';
-        Object.keys(inventoryData).forEach(brand => {
-            const tag = document.createElement('div');
-            tag.className = 'brand-tag'; tag.innerText = brand; tag.setAttribute('data-brand', brand);
-            if (brand === currentSettingBrand) tag.classList.add('active');
-            tag.onclick = function() { selectSettingBrand(brand); };
-            container.appendChild(tag);
+        // 遍历 brandOrder
+        brandOrder.forEach(brand => {
+            if(inventoryData[brand] !== undefined) {
+                const tag = document.createElement('div');
+                tag.className = 'brand-tag'; tag.innerText = brand; tag.setAttribute('data-brand', brand);
+                if (brand === currentSettingBrand) tag.classList.add('active');
+                tag.onclick = function() { selectSettingBrand(brand); };
+                container.appendChild(tag);
+            }
         });
         const input = document.createElement('input');
         input.type = 'text'; input.id = 'newBrandInput'; input.className = 'brand-input-tag'; input.placeholder = '+';
@@ -942,9 +968,12 @@
         const name = input.value.trim();
         if (!name) return;
         if (Object.prototype.hasOwnProperty.call(inventoryData, name)) return showToast("品牌名称已存在", "error");
+        
         isAddingBrandLock = true;
         inventoryData[name] = [];
+        brandOrder.push(name); // 存入顺序
         logAction(`添加品牌: ${name}`);
+        
         renderBrandSelects(); renderBrandTags(); selectSettingBrand(name);
         setTimeout(() => { document.getElementById('newBrandInput')?.focus(); isAddingBrandLock = false; }, 300);
     }
@@ -967,6 +996,8 @@
         const brand = currentSettingBrand;
         if (!brand) return;
         delete inventoryData[brand];
+        brandOrder = brandOrder.filter(b => b !== brand); // 从顺序中删除
+        
         if(inventoryImages[brand]) delete inventoryImages[brand];
         if(sessionCounts[brand]) delete sessionCounts[brand];
         logAction(`删除品牌: ${brand}`);
@@ -983,7 +1014,12 @@
         showCustomPrompt("请输入新的品牌名称", oldName, (newName) => {
             if (newName && newName !== oldName) {
                 if (inventoryData[newName]) return showToast("该品牌名称已存在！", "error");
+                
                 inventoryData[newName] = inventoryData[oldName]; delete inventoryData[oldName];
+                // 更新顺序
+                const idx = brandOrder.indexOf(oldName);
+                if(idx !== -1) brandOrder[idx] = newName;
+                
                 if (inventoryImages[oldName]) { inventoryImages[newName] = inventoryImages[oldName]; delete inventoryImages[oldName]; }
                 if (sessionCounts[oldName]) { sessionCounts[newName] = sessionCounts[oldName]; delete sessionCounts[oldName]; }
                 logAction(`重命名品牌: ${oldName}->${newName}`);
@@ -995,12 +1031,12 @@
 
     function reorderBrands() {
         const tags = document.querySelectorAll('#brandTags .brand-tag');
-        const newInventory = {};
+        const newOrder = [];
         tags.forEach(tag => {
-            const brandName = tag.getAttribute('data-brand');
-            if (brandName && inventoryData[brandName]) newInventory[brandName] = inventoryData[brandName];
+            const name = tag.getAttribute('data-brand');
+            if (name) newOrder.push(name);
         });
-        inventoryData = newInventory;
+        brandOrder = newOrder;
         renderBrandSelects();
         logAction("调整品牌排序");
     }
@@ -1149,7 +1185,7 @@
         if(lis[index]) { const closeBtn = lis[index].querySelector('.btn-cancel-mini'); if(closeBtn) closeActionMenu(closeBtn); }
     }
 
-    // 2. 修改：压缩调整 (300px, 0.5)
+    // 2. 修改：调整压缩 (300px, 0.5)
     function handleFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -1159,6 +1195,7 @@
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
+                // 300px
                 const maxWidth = 300; 
                 const maxHeight = 300;
                 let width = img.width;
@@ -1171,6 +1208,7 @@
                 canvas.width = width;
                 canvas.height = height;
                 ctx.drawImage(img, 0, 0, width, height);
+                // 0.5 画质
                 const base64 = canvas.toDataURL('image/jpeg', 0.5);
                 
                 const brand = pendingUploadBrand;
