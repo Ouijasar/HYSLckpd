@@ -32,7 +32,6 @@
         .btn-settings { background-color: #4b5563; color: white; user-select: none;} 
         .btn-primary { background-color: var(--primary-color); color: white; width: 100%; padding: 12px; margin-top: 20px; font-size: 1rem;}
         
-        /* 3. 修改：导出按钮专用样式，更高更大 */
         .btn-export-big { 
             background-color: var(--primary-color); 
             color: white; 
@@ -55,7 +54,6 @@
         .btn-export-local { background-color: #8b5cf6; color: white; margin-right: 10px; } 
         .btn-import-local { background-color: #64748b; color: white; width: 100%; margin-top: 10px; border: 1px dashed #cbd5e1;} 
         .btn-log { background-color: #6366f1; color: white; font-size: 0.8rem; padding: 4px 8px; }
-        /* 2. 修改：新增应用按钮样式 */
         .btn-apply { background-color: #10b981; color: white; font-size: 0.8rem; padding: 4px 12px; margin-right: 5px; }
         
         .btn-more { background-color: #94a3b8; color: white; padding: 4px 10px; font-size: 0.9rem; margin-left: 5px; border-radius: 4px;}
@@ -159,7 +157,7 @@
         .btn-cancel { background-color: #94a3b8; color: white; }
         
         .version-list { list-style: none; padding: 0; margin: 0; }
-        .version-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: default; } /* 2. 修改：移除整行点击手势 */
+        .version-item { padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: default; }
         .version-item:hover { background-color: #f9f9f9; }
         .version-info { flex: 1; }
         .version-actions { display: flex; gap: 5px; align-items: center; }
@@ -167,7 +165,9 @@
         .tag-latest { background: #dcfce7; color: #166534; }
         .tag-history { background: #f1f5f9; color: #64748b; }
         
-        #versionSelectModal, #logModal, #customDialogModal { z-index: 3000; }
+        /* 堆叠层级管理 */
+        #versionSelectModal, #logModal, #customDialogModal, #saveProcessModal { z-index: 3000; }
+        
         #logList { list-style: none; padding: 0; max-height: 400px; overflow-y: auto; }
         #logList li { border-bottom: 1px solid #eee; padding: 10px; font-size: 0.9rem; }
         #logList .log-time { color: #888; font-size: 0.8rem; margin-bottom: 2px; }
@@ -181,25 +181,15 @@
         .custom-dialog-content { max-width: 400px; width: 90%; text-align: center; }
         .dialog-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 15px; color: #333; }
         .dialog-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 20px; font-size: 1rem; }
+        .dialog-btns { display: flex; gap: 10px; justify-content: center; width: 100%; align-items: center; }
+        .dialog-btns button { flex: 1; min-width: 0; height: 40px; padding: 0 10px; margin: 0; display: flex; align-items: center; justify-content: center; }
+
+        /* Loader Animation */
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* 1. 修改：弹窗按钮强制等高、等宽、居中 */
-        .dialog-btns { 
-            display: flex; 
-            gap: 10px; 
-            justify-content: center; 
-            width: 100%; 
-            align-items: center; /* 确保垂直居中 */
-        }
-        .dialog-btns button { 
-            flex: 1; 
-            min-width: 0; 
-            height: 40px; 
-            padding: 0 10px; 
-            margin: 0; /* 移除可能存在的margin */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        .loading-container { padding: 40px; text-align: center; }
+        .loading-text { font-size: 1.1rem; color: #555; margin-bottom: 20px; font-weight: bold;}
     </style>
 </head>
 <body>
@@ -253,7 +243,7 @@
             <div id="alertTitleText" class="alert-title">⚠️ 检测到配置有新的改动，是否保存到云端？</div>
             <div class="alert-actions">
                 <button class="btn btn-cancel" onclick="forceCloseSettings()">🏠 返回主页 (暂不保存)</button>
-                <button class="btn btn-cloud-load" onclick="showVersionSelector(this)">🔄 恢复/加载云端</button>
+                <button class="btn btn-cloud-load" onclick="showVersionSelector()">🔄 恢复/加载云端</button>
                 <button class="btn btn-close-green" onclick="saveSettingsToCloud(true)">☁️ 保存到云端</button>
             </div>
         </div>
@@ -263,7 +253,7 @@
             
             <div style="display: flex; align-items: center;">
                 <button class="btn btn-export-local" onclick="exportLocalConfig()" title="导出配置到本地文件">📤 导出配置</button>
-                <button class="btn btn-cloud-load" onclick="showVersionSelector(this)">☁️ 加载配置</button>
+                <button class="btn btn-cloud-load" onclick="showVersionSelector()">☁️ 加载配置</button>
                 <button id="defaultCloseBtn" class="btn btn-close-green" onclick="checkAndClose()">💾 保存 / 关闭</button>
             </div>
         </div>
@@ -310,13 +300,31 @@
 
 <div id="versionSelectModal" class="modal">
     <div class="modal-content" style="max-width: 500px;">
-        <h3>🕒 选择要加载的配置版本</h3>
-        <ul id="versionList" class="version-list"></ul>
-        
-        <button class="btn btn-import-local" onclick="document.getElementById('configFileInput').click()">📂 导入本地配置</button>
-        <div style="font-size:0.8rem; color:#999; margin-top:5px; text-align:center;">支持导入 .json 格式的配置文件</div>
-        
-        <button class="btn btn-cancel" style="width:100%; margin-top:15px;" onclick="document.getElementById('versionSelectModal').style.display='none'">取消</button>
+        <div id="versionLoadingState" class="loading-container" style="display:none">
+            <div class="spinner"></div>
+            <div class="loading-text">正在获取云端配置...</div>
+            <button class="btn btn-cancel" onclick="cancelCurrentTask()">取消</button>
+        </div>
+
+        <div id="versionListState">
+            <h3>🕒 选择要加载的配置版本</h3>
+            <ul id="versionList" class="version-list"></ul>
+            
+            <button class="btn btn-import-local" onclick="document.getElementById('configFileInput').click()">📂 导入本地配置</button>
+            <div style="font-size:0.8rem; color:#999; margin-top:5px; text-align:center;">支持导入 .json 格式的配置文件</div>
+            
+            <button class="btn btn-cancel" style="width:100%; margin-top:15px;" onclick="document.getElementById('versionSelectModal').style.display='none'">取消</button>
+        </div>
+    </div>
+</div>
+
+<div id="saveProcessModal" class="modal">
+    <div class="modal-content" style="max-width: 300px;">
+        <div class="loading-container">
+            <div class="spinner"></div>
+            <div class="loading-text">正在保存到云端...</div>
+            <button class="btn btn-cancel" onclick="cancelCurrentTask()">取消</button>
+        </div>
     </div>
 </div>
 
@@ -372,8 +380,11 @@
     let brandSortable = null;
     let productSortable = null;
     let isAddingBrandLock = false;
+    
+    // Cancellation Flag
+    let taskAbortFlag = false;
 
-    // --- UI Helpers (Toast & Dialogs) ---
+    // --- UI Helpers ---
     function showToast(msg, type = 'success') {
         const container = document.getElementById('toastContainer');
         const div = document.createElement('div');
@@ -385,7 +396,7 @@
 
     function showCustomConfirm(msg, onConfirm) {
         const modal = document.getElementById('customDialogModal');
-        document.getElementById('dialogTitle').innerHTML = msg; // 支持HTML换行
+        document.getElementById('dialogTitle').innerHTML = msg;
         document.getElementById('dialogInput').style.display = 'none';
         modal.style.display = 'flex';
         
@@ -405,7 +416,7 @@
     function showCustomPrompt(title, defaultValue, onConfirm) {
         const modal = document.getElementById('customDialogModal');
         const input = document.getElementById('dialogInput');
-        document.getElementById('dialogTitle').innerHTML = title;
+        document.getElementById('dialogTitle').innerText = title;
         input.style.display = 'block';
         input.value = defaultValue || '';
         modal.style.display = 'flex';
@@ -452,7 +463,13 @@
         });
     }
 
-    // 导出总日志
+    function cancelCurrentTask() {
+        taskAbortFlag = true;
+        document.getElementById('versionSelectModal').style.display = 'none';
+        document.getElementById('saveProcessModal').style.display = 'none';
+        showToast("操作已取消");
+    }
+
     function exportChangeLog() {
         let allLogs = [];
         if (remoteFullData.history && remoteFullData.history.length > 0) {
@@ -593,18 +610,31 @@
         });
     }
 
-    async function showVersionSelector(btnElement) {
+    async function showVersionSelector() {
         if(!supabaseClient) return showToast("请先配置数据库", "error");
-        const oldText = btnElement ? btnElement.innerText : "";
-        if(btnElement) btnElement.innerText = "⏳ 加载中...";
+        
+        // UI Reset
+        taskAbortFlag = false;
+        document.getElementById('versionLoadingState').style.display = 'block';
+        document.getElementById('versionListState').style.display = 'none';
+        document.getElementById('versionSelectModal').style.display = 'flex';
+        
         try {
             const { data, error } = await supabaseClient.from('hysl-ckpd-data').select('setting_value').eq('setting_key', 'main_data').single();
+            if (taskAbortFlag) return; // Cancelled
             if (error) throw error;
+            
             processRemoteData(data.setting_value);
             renderVersionList();
-            document.getElementById('versionSelectModal').style.display = 'flex';
-        } catch(e) { showToast("获取失败: " + e.message, "error"); } 
-        finally { if(btnElement) btnElement.innerText = oldText; }
+            
+            document.getElementById('versionLoadingState').style.display = 'none';
+            document.getElementById('versionListState').style.display = 'block';
+        } catch(e) { 
+            if(!taskAbortFlag) {
+                document.getElementById('versionSelectModal').style.display = 'none';
+                showToast("获取失败: " + e.message, "error"); 
+            }
+        } 
     }
 
     function viewLog(type, index) {
@@ -673,8 +703,8 @@
     async function saveSettingsToCloud(closeAfterSave = false) {
         if (!supabaseClient) return showToast("请配置 Key", "error");
         
-        const saveBtns = document.querySelectorAll('.btn-close-green');
-        saveBtns.forEach(btn => { btn.innerText = "⏳ 保存中..."; btn.disabled = true; });
+        taskAbortFlag = false;
+        document.getElementById('saveProcessModal').style.display = 'flex';
 
         try {
             const nowTime = new Date().toLocaleString();
@@ -683,7 +713,12 @@
             if (remoteFullData.active) newHistory.unshift(remoteFullData.active);
             if (newHistory.length > 3) newHistory = newHistory.slice(0, 3);
             const finalPayload = { active: { time: nowTime, data: newDataPackage }, history: newHistory };
+            
+            // Note: Aborting upsert mid-flight isn't directly supported by Supabase JS simply, 
+            // but we can ignore the result if taskAbortFlag is set.
             const { error } = await supabaseClient.from('hysl-ckpd-data').upsert({ setting_key: 'main_data', setting_value: finalPayload });
+            
+            if (taskAbortFlag) return; // User cancelled
             if (error) throw error;
 
             remoteFullData = finalPayload;
@@ -692,16 +727,16 @@
             changeLog = []; 
             
             isHistoryLoaded = false; 
+            document.getElementById('saveProcessModal').style.display = 'none';
             showToast("保存成功！");
             if (closeAfterSave) forceCloseSettings();
             else document.getElementById('unsavedAlert').style.display = 'none';
-        } catch (err) { showToast("保存失败: " + err.message, "error"); } 
-        finally {
-            saveBtns.forEach(btn => btn.disabled = false);
-            document.getElementById('defaultCloseBtn').innerText = "💾 保存 / 关闭";
-            const alertSave = document.querySelector('#unsavedAlert .btn-close-green');
-            if(alertSave) alertSave.innerText = "☁️ 保存到云端";
-        }
+        } catch (err) { 
+            if (!taskAbortFlag) {
+                document.getElementById('saveProcessModal').style.display = 'none';
+                showToast("保存失败: " + err.message, "error"); 
+            }
+        } 
     }
 
     function switchBrand() {
@@ -967,6 +1002,7 @@
         });
         inventoryData = newInventory;
         renderBrandSelects();
+        logAction("调整品牌排序");
     }
 
     function loadProductsForSetting() {
@@ -1113,6 +1149,7 @@
         if(lis[index]) { const closeBtn = lis[index].querySelector('.btn-cancel-mini'); if(closeBtn) closeActionMenu(closeBtn); }
     }
 
+    // 2. 修改：压缩调整 (300px, 0.5)
     function handleFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -1122,7 +1159,6 @@
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                // 300px
                 const maxWidth = 300; 
                 const maxHeight = 300;
                 let width = img.width;
@@ -1135,7 +1171,6 @@
                 canvas.width = width;
                 canvas.height = height;
                 ctx.drawImage(img, 0, 0, width, height);
-                // 0.5 画质
                 const base64 = canvas.toDataURL('image/jpeg', 0.5);
                 
                 const brand = pendingUploadBrand;
