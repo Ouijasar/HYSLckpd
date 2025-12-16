@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>仓库库存盘点工具 (云端版)</title>
+    <title>仓库库存盘点工具 (完整功能版)</title>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -60,8 +60,7 @@
             padding: 0 20px;
         }
         
-        .btn-save-cloud { background-color: #7c3aed; color: white; width: 100%; margin-top: 20px; padding: 15px; font-size: 1rem; font-weight: bold; border: 2px solid #6d28d9; transition: transform 0.2s; }
-        .btn-save-cloud:hover { transform: scale(1.02); box-shadow: 0 0 10px rgba(124, 58, 237, 0.5); }
+        .btn-save-cloud { background-color: #7c3aed; color: white; }
         
         .btn-close-green { background-color: #10b981; color: white; }
         .btn:hover { opacity: 0.9; }
@@ -236,13 +235,37 @@
             background-color: #fef2f2;
             border-color: #fca5a5;
         }
+
+        /* 新增：提示框与版本列表样式 */
+        .alert-box {
+            display: none;
+            background-color: #fff7ed; border: 2px solid #fed7aa;
+            padding: 15px; border-radius: 8px; margin-bottom: 20px;
+            animation: fadeIn 0.3s;
+            flex-direction: column; gap: 10px;
+        }
+        .alert-title { color: #c2410c; font-weight: bold; display: flex; align-items: center; gap: 5px; }
+        .alert-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+        .btn-revert { background-color: #f59e0b; color: white; }
+        .btn-cancel { background-color: #94a3b8; color: white; }
+        
+        .version-list { list-style: none; padding: 0; margin: 0; }
+        .version-item { 
+            padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; 
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .version-item:hover { background-color: #f0f9ff; }
+        .version-tag { font-size: 0.8rem; padding: 2px 6px; border-radius: 4px; }
+        .tag-latest { background: #dcfce7; color: #166534; }
+        .tag-history { background: #f1f5f9; color: #64748b; }
+        #versionSelectModal { z-index: 2000; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <header>
-        <h1>📦 库存盘点工具 (云端版)</h1>
+        <h1>📦 库存盘点工具 (完整版)</h1>
         <button class="btn btn-settings" onclick="openSettings()">⚙️ 设置</button>
     </header>
 
@@ -282,21 +305,22 @@
 
 <div id="settingsModal" class="modal" style="display: none;">
     <div class="modal-content">
+        
+        <div id="unsavedAlert" class="alert-box">
+            <div class="alert-title">⚠️ 检测到配置有新的改动，是否保存到云端？</div>
+            <div class="alert-actions">
+                <button class="btn btn-cancel" onclick="forceCloseSettings()">🏠 返回主页 (暂不保存)</button>
+                <button class="btn btn-revert" onclick="showVersionSelector()">🔄 恢复/加载云端</button>
+                <button class="btn btn-save-cloud" onclick="saveSettingsToCloud(true)">☁️ 保存到云端</button>
+            </div>
+        </div>
+
         <div class="modal-header">
             <h2 id="settingsTitle" draggable="true">⚙️ 设置</h2>
             
             <div style="display: flex; align-items: center;">
-                <button class="btn btn-cloud-load" onclick="loadSettingsFromCloud()">☁️ 从云端加载配置</button>
-                <button id="defaultCloseBtn" class="btn btn-close-green" onclick="checkCloseSettings()" style="display: block;">关闭</button>
-            </div>
-            
-            <div id="closeConfirmArea" class="close-confirm-area" style="display: none;">
-                <div class="close-confirm-text">您有未保存的修改，建议保存到云端！</div>
-                <div class="close-confirm-btns">
-                    <button class="btn btn-danger" onclick="revertAndCloseSettings()">放弃修改</button>
-                    <button class="btn btn-continue" onclick="continueSettings()">↩️ 继续设置</button>
-                    <button class="btn btn-save-cloud" style="margin:0; padding: 6px 12px; font-size: 0.9rem; width:auto;" onclick="saveSettingsToCloud()">💾 保存到云端</button>
-                </div>
+                <button class="btn btn-cloud-load" onclick="showVersionSelector()">☁️ 加载配置</button>
+                <button id="defaultCloseBtn" class="btn btn-close-green" onclick="checkAndClose()">💾 保存 / 关闭</button>
             </div>
         </div>
 
@@ -338,12 +362,15 @@
                 <button class="btn btn-add" onclick="addProduct()">添加<br>商品</button>
             </div>
         </div>
-        
-        <hr>
-        <div style="text-align: center;">
-            <p style="color: #666; font-size: 0.9rem;">⚠️ 提示：配置修改后，请保存到云端以便其他设备使用。</p>
-            <button id="saveBtn" class="btn btn-save-cloud" onclick="saveSettingsToCloud()">💾 保存配置到云端</button>
-        </div>
+    </div>
+</div>
+
+<div id="versionSelectModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+        <h3>🕒 选择要加载的配置版本</h3>
+        <ul id="versionList" class="version-list">
+            </ul>
+        <button class="btn btn-cancel" style="width:100%; margin-top:15px;" onclick="document.getElementById('versionSelectModal').style.display='none'">取消</button>
     </div>
 </div>
 
@@ -352,25 +379,15 @@
 </div>
 <input type="file" id="hiddenFileInput" accept="image/*" style="display:none">
 
-<script id="init-data" type="application/json">
-{
-    "示例品牌": ["示例商品1", "示例商品2"]
-}
-</script>
-<script id="init-images" type="application/json">{}</script>
-<script id="init-logs" type="application/json">[]</script>
-
 <script>
     // ==========================================
     // ⚠️ 请在此处填入您的 Supabase 配置信息
     // ==========================================
-    const SUPABASE_URL = 'https://xlutfzstdxltvasnjmzq.supabase.co'; // 例如: https://xyz.supabase.co
-    const SUPABASE_KEY = 'sb_publishable_bevWIETQac-lS6wQ7OnUnQ_DGbMmYvu';     // 例如: eyJhbGciOiJIUzI1NiIsInR...
+    const SUPABASE_URL = 'https://xlutfzstdxltvasnjmzq.supabase.co'; // 请在此填写
+    const SUPABASE_KEY = 'sb_publishable_bevWIETQac-lS6wQ7OnUnQ_DGbMmYvu';     // 请在此填写
     
-    // 初始化 Supabase 客户端 (变量名改为 supabaseClient 避免冲突)
+    // 初始化 Supabase 客户端
     let supabaseClient = null;
-    
-    // 检查全局对象 window.supabase 是否存在
     if (typeof window.supabase !== 'undefined' && SUPABASE_URL.indexOf('YOUR_') === -1) {
         try {
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -382,96 +399,109 @@
     // 全局数据变量
     let inventoryData = {};
     let inventoryImages = {};
-    let changeLog = [];
-    
-    // 盘点数据 (本地存储)
     let sessionCounts = {};
     const STORAGE_KEY = 'inventory_session_counts';
 
+    // 云端同步状态 (Pro 功能)
+    let remoteFullData = { active: null, history: [] }; 
+    let lastSyncedHash = "";
+
     let currentBrand = "";
     let currentSettingBrand = "";
-    let backupInventoryData = null; 
-    let backupInventoryImages = null;
-    let isSettingsModified = false;
     let brandSortable = null;
     let productSortable = null;
     let isAddingBrandLock = false;
 
     // 初始化
     window.onload = function() {
-        // 尝试从 DOM 读取初始数据 (作为 fallback)
-        try {
-            inventoryData = JSON.parse(document.getElementById('init-data').textContent || "{}");
-            inventoryImages = JSON.parse(document.getElementById('init-images').textContent || "{}");
-            changeLog = JSON.parse(document.getElementById('init-logs').textContent || "[]");
-        } catch(e) { console.error("Parse init data error", e); }
-
-        // 读取本地缓存的盘点数量
         const savedSession = localStorage.getItem(STORAGE_KEY);
         if (savedSession) {
             try { sessionCounts = JSON.parse(savedSession); } catch(e) {}
         }
-
+        
         renderBrandSelects();
         
-        // 自动尝试从云端加载一次最新配置 (可选)
+        // 自动加载最新
         if (supabaseClient) {
-            // loadSettingsFromCloud(true); // 启用此行可在打开页面时自动同步
+            silentLoadLatest();
         } else {
             console.log("Supabase 未配置，运行在本地离线模式");
         }
         
-        // 图片上传监听
         document.getElementById('hiddenFileInput').addEventListener('change', handleFileSelect);
     };
 
     // ==========================================
-    // 云端存储逻辑 (Supabase)
+    // 核心：保存与关闭逻辑 (Diff Check)
     // ==========================================
-
-    async function saveSettingsToCloud() {
-        if (!supabaseClient) {
-            alert("⚠️ 请先在代码中配置 Supabase URL 和 Key！");
-            return;
-        }
+    
+    function checkAndClose() {
+        // 计算当前数据的 Hash
+        const currentHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
         
-        const payload = {
-            inventoryData: inventoryData,
-            inventoryImages: inventoryImages,
-            changeLog: changeLog
-        };
-        
-        const saveBtn = document.getElementById('saveBtn');
-        const originalText = saveBtn.innerText;
-        saveBtn.innerText = "⏳ 保存中...";
-        saveBtn.disabled = true;
-
-        try {
-            // Upsert: 如果存在则更新，不存在则插入
-            const { data, error } = await supabaseClient
-                .from('hysl-ckpd-data')
-                .upsert({ setting_key: 'main_data', setting_value: payload });
-                
-            if (error) throw error;
-            
-            isSettingsModified = false;
-            document.getElementById('closeConfirmArea').style.display = 'none';
-            document.getElementById('defaultCloseBtn').style.display = 'block';
-            alert("✅ 设置已成功保存到云端数据库！");
-        } catch (err) {
-            console.error(err);
-            alert("❌ 保存失败: " + err.message);
-        } finally {
-            saveBtn.innerText = originalText;
-            saveBtn.disabled = false;
+        if (currentHash === lastSyncedHash) {
+            forceCloseSettings();
+        } else {
+            const alertBox = document.getElementById('unsavedAlert');
+            alertBox.style.display = 'flex';
+            document.querySelector('#settingsModal .modal-content').scrollTop = 0;
         }
     }
 
-    async function loadSettingsFromCloud(isAuto = false) {
-        if (!supabaseClient) {
-            if(!isAuto) alert("⚠️ 请先在代码中配置 Supabase URL 和 Key！");
-            return;
+    function forceCloseSettings() {
+        document.getElementById('settingsModal').style.display = 'none';
+        document.getElementById('unsavedAlert').style.display = 'none';
+        
+        // 如果当前品牌被删或改名，刷新主界面
+        renderBrandSelects();
+        if(currentBrand && !inventoryData[currentBrand]) {
+            currentBrand = "";
+            document.getElementById('brandSelect').value = "";
+            toggleInventorySection();
+        } else if (currentBrand) {
+            loadProducts(); // 刷新列表名字可能变了
         }
+    }
+
+    // ==========================================
+    // 核心：云端交互 (支持版本控制)
+    // ==========================================
+
+    async function silentLoadLatest() {
+        try {
+            const { data } = await supabaseClient
+                .from('hysl-ckpd-data')
+                .select('setting_value')
+                .eq('setting_key', 'main_data')
+                .single();
+
+            if (data && data.setting_value) {
+                processRemoteData(data.setting_value);
+                // 首次加载应用数据
+                applyDataToApp(remoteFullData.active.data);
+                lastSyncedHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
+            }
+        } catch (e) { console.error("Auto load failed", e); }
+    }
+
+    function processRemoteData(jsonValue) {
+        if (jsonValue.active && Array.isArray(jsonValue.history)) {
+            remoteFullData = jsonValue;
+        } else {
+            // 旧数据兼容
+            remoteFullData = {
+                active: { time: new Date().toLocaleString(), data: jsonValue },
+                history: []
+            };
+        }
+    }
+
+    async function showVersionSelector() {
+        if(!supabaseClient) return alert("请先配置数据库");
+        
+        const btn = document.querySelector('.btn-cloud-load');
+        const oldText = btn.innerText;
+        btn.innerText = "⏳";
         
         try {
             const { data, error } = await supabaseClient
@@ -480,61 +510,113 @@
                 .eq('setting_key', 'main_data')
                 .single();
                 
-            if (error) {
-                // 如果是没找到数据(PGRST116)，可能是第一次使用
-                if(error.code !== 'PGRST116') throw error;
-                if(!isAuto) alert("☁️ 云端暂无数据。");
-                return;
-            }
+            if (error) throw error;
+            processRemoteData(data.setting_value);
             
-            if (data && data.setting_value) {
-                const sv = data.setting_value;
-                // 恢复数据
-                if(sv.inventoryData) inventoryData = sv.inventoryData;
-                if(sv.inventoryImages) inventoryImages = sv.inventoryImages;
-                if(sv.changeLog) changeLog = sv.changeLog;
-                
-                // 刷新界面
-                renderBrandSelects();
-                if(currentBrand) {
-                    // 如果当前选中的品牌在新数据中不存在，重置
-                    if(!inventoryData[currentBrand]) {
-                        currentBrand = "";
-                        document.getElementById('brandSelect').value = "";
-                        toggleInventorySection();
-                    } else {
-                        loadProducts();
-                    }
-                }
-                
-                // 如果设置窗口打开中，也刷新设置界面
-                if(document.getElementById('settingsModal').style.display === 'flex') {
-                    renderBrandTags();
-                    if(currentSettingBrand && inventoryData[currentSettingBrand]) {
-                        loadProductsForSetting();
-                    } else {
-                        document.getElementById('productManageSection').style.display = 'none';
-                    }
-                }
+            const list = document.getElementById('versionList');
+            list.innerHTML = '';
+            
+            // 最新版
+            const active = remoteFullData.active || {};
+            list.innerHTML += `
+                <li class="version-item" onclick="confirmLoadVersion('active', 0)">
+                    <div><strong>📌 最新版本</strong><br><small style="color:#888">${active.time || '未知时间'}</small></div>
+                    <span class="version-tag tag-latest">Current</span>
+                </li>`;
+            
+            // 历史
+            remoteFullData.history.forEach((hist, index) => {
+                list.innerHTML += `
+                    <li class="version-item" onclick="confirmLoadVersion('history', ${index})">
+                        <div><strong>🕒 历史存档 ${index + 1}</strong><br><small style="color:#888">${hist.time || '未知时间'}</small></div>
+                        <span class="version-tag tag-history">Backup</span>
+                    </li>`;
+            });
+            
+            document.getElementById('versionSelectModal').style.display = 'flex';
+        } catch(e) {
+            alert("获取失败: " + e.message);
+        } finally {
+            btn.innerText = oldText;
+        }
+    }
 
-                if(!isAuto) alert("✅ 已成功从云端加载最新配置！");
+    function confirmLoadVersion(type, index) {
+        let targetData = null;
+        if (type === 'active') targetData = remoteFullData.active.data;
+        else targetData = remoteFullData.history[index].data;
+        
+        applyDataToApp(targetData);
+        lastSyncedHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
+        
+        document.getElementById('versionSelectModal').style.display = 'none';
+        document.getElementById('unsavedAlert').style.display = 'none';
+        
+        if(document.getElementById('settingsModal').style.display === 'flex') {
+            renderBrandTags();
+            if(currentSettingBrand) loadProductsForSetting();
+        }
+        alert("✅ 已加载配置！");
+    }
+
+    function applyDataToApp(dataObj) {
+        if(dataObj.inventoryData) inventoryData = dataObj.inventoryData;
+        else inventoryData = dataObj; 
+        
+        if(dataObj.inventoryImages) inventoryImages = dataObj.inventoryImages;
+        else inventoryImages = {};
+        
+        renderBrandSelects();
+    }
+
+    async function saveSettingsToCloud(closeAfterSave = false) {
+        if (!supabaseClient) return alert("请配置 Key");
+        
+        const saveBtn = document.querySelector('.btn-save-cloud');
+        const oldText = saveBtn.innerText;
+        saveBtn.innerText = "⏳ 保存中...";
+        saveBtn.disabled = true;
+
+        try {
+            const nowTime = new Date().toLocaleString();
+            const newDataPackage = { inventoryData, inventoryImages };
+            
+            let newHistory = [...remoteFullData.history];
+            if (remoteFullData.active) newHistory.unshift(remoteFullData.active);
+            if (newHistory.length > 3) newHistory = newHistory.slice(0, 3);
+            
+            const finalPayload = {
+                active: { time: nowTime, data: newDataPackage },
+                history: newHistory
+            };
+            
+            const { error } = await supabaseClient
+                .from('hysl-ckpd-data')
+                .upsert({ setting_key: 'main_data', setting_value: finalPayload });
+                
+            if (error) throw error;
+
+            remoteFullData = finalPayload;
+            lastSyncedHash = JSON.stringify({ d: inventoryData, i: inventoryImages });
+            
+            alert("✅ 保存成功！");
+            
+            if (closeAfterSave) {
+                forceCloseSettings();
+            } else {
+                document.getElementById('unsavedAlert').style.display = 'none';
             }
         } catch (err) {
-            console.error(err);
-            if(!isAuto) alert("❌ 加载失败: " + err.message);
+            alert("❌ 保存失败: " + err.message);
+        } finally {
+            saveBtn.innerText = oldText;
+            saveBtn.disabled = false;
         }
     }
 
     // ==========================================
-    // 业务逻辑 (保持原有功能)
+    // 业务逻辑 (UI / 原功能恢复)
     // ==========================================
-
-    function logAction(msg) {
-        const now = new Date();
-        const timeStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes()}`;
-        changeLog.unshift({ time: timeStr, msg: msg });
-        if(changeLog.length > 200) changeLog.pop();
-    }
 
     function switchBrand() {
         const newBrand = document.getElementById('brandSelect').value;
@@ -711,12 +793,11 @@
             const timeStr = now.getFullYear() + "-" + (now.getMonth()+1) + "-" + now.getDate();
             XLSX.writeFile(wb, `库存盘点汇总_${timeStr}.xlsx`);
             
-            // 导出后清空
             sessionCounts = {};
             localStorage.removeItem(STORAGE_KEY);
             if(currentBrand) loadProducts();
             
-            alert("✅ 导出成功！\n\n本次盘点已结束，数据已自动清空。\n下次打开将开始新的盘点。");
+            alert("✅ 导出成功！\n\n本次盘点已结束，数据已自动清空。");
         } catch (error) {
             console.error(error);
             alert("❌ 导出失败：" + error.message);
@@ -724,19 +805,12 @@
     }
 
     // ==========================================
-    // 设置界面逻辑
+    // 设置界面逻辑 (恢复原版 UI)
     // ==========================================
 
     function openSettings() {
-        document.getElementById('defaultCloseBtn').style.display = 'block';
-        document.getElementById('closeConfirmArea').style.display = 'none';
-        
-        // 备份当前数据，以便取消
-        backupInventoryData = JSON.parse(JSON.stringify(inventoryData));
-        backupInventoryImages = JSON.parse(JSON.stringify(inventoryImages));
-        isSettingsModified = false;
-        
         document.getElementById('settingsModal').style.display = 'flex';
+        document.getElementById('unsavedAlert').style.display = 'none';
         
         renderBrandTags();
         
@@ -747,9 +821,7 @@
                 ghostClass: 'blue-background-class',
                 filter: '.brand-input-tag',
                 preventOnFilter: false,
-                onEnd: function (evt) {
-                    reorderBrands();
-                }
+                onEnd: reorderBrands
             });
         }
         
@@ -757,52 +829,6 @@
             document.getElementById('productManageSection').style.display = 'none';
         } else {
             selectSettingBrand(currentSettingBrand);
-        }
-    }
-
-    function checkCloseSettings() {
-        if (isSettingsModified) {
-            document.getElementById('defaultCloseBtn').style.display = 'none';
-            document.getElementById('closeConfirmArea').style.display = 'flex';
-        } else {
-            forceCloseSettings();
-        }
-    }
-
-    function continueSettings() {
-        document.getElementById('closeConfirmArea').style.display = 'none';
-        document.getElementById('defaultCloseBtn').style.display = 'block';
-    }
-
-    function revertAndCloseSettings() {
-        if (backupInventoryData) {
-            inventoryData = JSON.parse(JSON.stringify(backupInventoryData));
-        }
-        if (backupInventoryImages) {
-            inventoryImages = JSON.parse(JSON.stringify(backupInventoryImages));
-        }
-        isSettingsModified = false;
-        renderBrandSelects();
-        
-        if(currentBrand && !inventoryData[currentBrand]) {
-            currentBrand = "";
-            document.getElementById('brandSelect').value = "";
-            toggleInventorySection();
-        }
-        
-        forceCloseSettings();
-    }
-
-    function forceCloseSettings() {
-        document.getElementById('settingsModal').style.display = 'none';
-        backupInventoryData = null;
-        backupInventoryImages = null;
-        
-        if(currentBrand) {
-            const searchVal = document.getElementById('searchProduct').value;
-            loadProducts();
-            document.getElementById('searchProduct').value = searchVal;
-            filterProducts();
         }
     }
 
@@ -837,11 +863,7 @@
             tag.className = 'brand-tag';
             tag.innerText = brand;
             tag.setAttribute('data-brand', brand);
-            
-            if (brand === currentSettingBrand) {
-                tag.classList.add('active');
-            }
-            
+            if (brand === currentSettingBrand) tag.classList.add('active');
             tag.onclick = function() { selectSettingBrand(brand); };
             container.appendChild(tag);
         });
@@ -851,7 +873,6 @@
         input.id = 'newBrandInput';
         input.className = 'brand-input-tag';
         input.placeholder = '+';
-        input.setAttribute('title', '输入新品牌名称并回车');
         input.addEventListener('keypress', function(e) { if (e.key === 'Enter') addBrand(); });
         input.addEventListener('blur', function() { addBrand(); });
         container.appendChild(input);
@@ -859,20 +880,14 @@
 
     function selectSettingBrand(brand) {
         currentSettingBrand = brand;
-        
         const sel = document.getElementById('settingBrandSelect');
         if(sel) sel.value = brand;
         
-        // 保持 focus
         const oldInput = document.getElementById('newBrandInput');
         let isFocus = oldInput ? (document.activeElement === oldInput) : false;
         
         renderBrandTags();
-        
-        if(isFocus) {
-            const newInput = document.getElementById('newBrandInput');
-            if(newInput) newInput.focus();
-        }
+        if(isFocus) document.getElementById('newBrandInput')?.focus();
 
         if (brand) {
             document.getElementById('productManageSection').style.display = 'block';
@@ -886,27 +901,21 @@
 
     function addBrand() {
         if(isAddingBrandLock) return;
-        
         const input = document.getElementById('newBrandInput');
         if(!input) return;
         
         const name = input.value.trim();
         if (!name) return;
-        
         if (Object.prototype.hasOwnProperty.call(inventoryData, name)) return alert("品牌名称已存在");
         
         isAddingBrandLock = true;
         inventoryData[name] = [];
-        isSettingsModified = true;
-        logAction(`添加品牌: ${name}`);
-        
         renderBrandSelects();
         renderBrandTags();
         selectSettingBrand(name);
         
         setTimeout(() => {
-            const newInput = document.getElementById('newBrandInput');
-            if(newInput) newInput.focus();
+            document.getElementById('newBrandInput')?.focus();
             isAddingBrandLock = false;
         }, 300);
     }
@@ -933,9 +942,6 @@
         if(inventoryImages[brand]) delete inventoryImages[brand];
         if(sessionCounts[brand]) delete sessionCounts[brand];
         
-        isSettingsModified = true;
-        logAction(`删除品牌: ${brand}`);
-        
         currentSettingBrand = "";
         renderBrandSelects();
         renderBrandTags();
@@ -958,7 +964,6 @@
             const finalName = newName.trim();
             if (inventoryData[finalName]) return alert("该品牌名称已存在！");
             
-            // 迁移数据
             inventoryData[finalName] = inventoryData[oldName];
             delete inventoryData[oldName];
             
@@ -971,12 +976,7 @@
                 delete sessionCounts[oldName];
             }
             
-            // Update active brand if needed
             if (currentBrand === oldName) currentBrand = finalName;
-            
-            isSettingsModified = true;
-            logAction(`重命名品牌: ${oldName} -> ${finalName}`);
-            
             renderBrandSelects();
             selectSettingBrand(finalName);
         }
@@ -991,9 +991,9 @@
         });
         inventoryData = newInventory;
         renderBrandSelects();
-        isSettingsModified = true;
     }
 
+    // 恢复产品列表逻辑 (含菜单)
     function loadProductsForSetting() {
         const brand = currentSettingBrand;
         const list = document.getElementById('productListManage');
@@ -1065,7 +1065,6 @@
             if(prod) newProducts.push(prod);
         });
         inventoryData[brand] = newProducts;
-        isSettingsModified = true;
     }
 
     function addProduct() {
@@ -1075,18 +1074,11 @@
         if (!inputVal.trim()) return alert("请输入商品名称");
         
         const newItems = inputVal.split('\n').map(item => item.trim()).filter(item => item !== "");
-        let addCount = 0;
         newItems.forEach(name => {
             if (!inventoryData[brand].includes(name)) {
                 inventoryData[brand].push(name);
-                addCount++;
             }
         });
-        
-        if(addCount > 0) {
-            isSettingsModified = true;
-            logAction(`品牌[${brand}] 批量添加 ${addCount} 个商品`);
-        }
         
         document.getElementById('newProductName').value = '';
         loadProductsForSetting();
@@ -1100,7 +1092,6 @@
             menu.style.display = 'none';
             btn.style.display = 'inline-block';
         } else {
-            // Close others
             document.querySelectorAll('.action-menu').forEach(el => el.style.display = 'none');
             document.querySelectorAll('.inline-confirm-wrapper').forEach(el => el.style.display = 'none');
             document.querySelectorAll('.btn-more').forEach(el => el.style.display = 'inline-block');
@@ -1115,7 +1106,6 @@
         const wrapper = closeBtn.closest('.item-actions-wrapper');
         const menu = wrapper.querySelector('.action-menu');
         const triggerBtn = wrapper.querySelector('.btn-more');
-        
         menu.style.display = 'none';
         triggerBtn.style.display = 'inline-block';
     }
@@ -1130,8 +1120,6 @@
         const wrapper = btn.closest('.item-actions-wrapper');
         wrapper.querySelector('.inline-confirm-wrapper').style.display = 'none';
         wrapper.querySelector('.action-menu-default').style.display = 'block';
-        
-        // Reset menu state
         const menuBtn = wrapper.querySelector('.btn-more');
         const menu = wrapper.querySelector('.action-menu');
         menuBtn.style.display = 'inline-block';
@@ -1140,18 +1128,10 @@
 
     function confirmDeleteProduct(brand, index) {
         const prodName = inventoryData[brand][index];
-        
-        if (sessionCounts[brand] && sessionCounts[brand][prodName]) {
-            delete sessionCounts[brand][prodName];
-        }
-        if (inventoryImages[brand] && inventoryImages[brand][prodName]) {
-            delete inventoryImages[brand][prodName];
-        }
+        if (sessionCounts[brand] && sessionCounts[brand][prodName]) delete sessionCounts[brand][prodName];
+        if (inventoryImages[brand] && inventoryImages[brand][prodName]) delete inventoryImages[brand][prodName];
         
         inventoryData[brand].splice(index, 1);
-        isSettingsModified = true;
-        logAction(`删除商品: ${brand} - ${prodName}`);
-        
         loadProductsForSetting();
     }
 
@@ -1166,46 +1146,32 @@
         input.value = oldName;
         input.className = 'edit-input';
         
-        // 替换显示
         textWrapper.innerHTML = '';
         textWrapper.appendChild(input);
         textWrapper.onclick = null; 
-        
         input.focus();
-        
-        // 隐藏菜单
         closeActionMenu(btn);
         
         const saveEdit = () => {
             const newName = input.value.trim();
             if (newName && newName !== oldName) {
-                // Update array
                 inventoryData[brand][index] = newName;
-                
-                // Update images key
                 if (inventoryImages[brand] && inventoryImages[brand][oldName]) {
                     inventoryImages[brand][newName] = inventoryImages[brand][oldName];
                     delete inventoryImages[brand][oldName];
                 }
-                // Update session counts key
                 if (sessionCounts[brand] && sessionCounts[brand][oldName]) {
                     sessionCounts[brand][newName] = sessionCounts[brand][oldName];
                     delete sessionCounts[brand][oldName];
                 }
-                
-                isSettingsModified = true;
-                logAction(`修改商品: ${oldName} -> ${newName}`);
             }
             loadProductsForSetting();
         };
-        
         input.addEventListener('blur', saveEdit);
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') saveEdit();
-        });
+        input.addEventListener('keypress', (e) => { if (e.key === 'Enter') saveEdit(); });
     }
 
-    // --- Image Handling ---
+    // 图片上传
     let pendingUploadBrand = null;
     let pendingUploadIndex = null;
 
@@ -1215,7 +1181,6 @@
         document.getElementById('hiddenFileInput').value = '';
         document.getElementById('hiddenFileInput').click();
         
-        // Find close btn to close menu
         const lis = document.querySelectorAll('#productListManage li');
         if(lis[index]) {
             const closeBtn = lis[index].querySelector('.btn-cancel-mini');
@@ -1226,21 +1191,14 @@
     function handleFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
-        
         const reader = new FileReader();
         reader.onload = function(e) {
             const base64 = e.target.result;
-            // Compress if needed (simple approximation)
-            // Here we just save it directly for simplicity
-            
             const brand = pendingUploadBrand;
             const index = pendingUploadIndex;
             const prodName = inventoryData[brand][index];
-            
             if (!inventoryImages[brand]) inventoryImages[brand] = {};
             inventoryImages[brand][prodName] = base64;
-            
-            isSettingsModified = true;
             loadProductsForSetting();
         };
         reader.readAsDataURL(file);
