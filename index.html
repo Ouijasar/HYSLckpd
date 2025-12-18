@@ -8,6 +8,8 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/pinyin-pro@3.18.2/dist/index.js"></script>
+
     <style>
         * { box-sizing: border-box; }
         
@@ -56,7 +58,21 @@
         .btn-log { background-color: #6366f1; color: white; font-size: 0.8rem; padding: 4px 8px; }
         .btn-apply { background-color: #10b981; color: white; font-size: 0.8rem; padding: 4px 12px; margin-right: 5px; }
         
-        .btn-more { background-color: #94a3b8; color: white; padding: 4px 10px; font-size: 0.9rem; margin-left: 5px; border-radius: 4px;}
+        .btn-more { 
+            background-color: #f3f4f6; 
+            color: #4b5563; 
+            padding: 4px 10px; 
+            font-size: 1.1rem; 
+            margin-left: 5px; 
+            border-radius: 6px;
+            font-weight: bold;
+            line-height: 1;
+            transition: all 0.2s;
+        }
+        .btn-more:hover { background-color: #e5e7eb; color: #111; }
+
+        .btn-advanced { background-color: #64748b; color: white; width: 100%; padding: 12px; margin-top: 20px; border-radius: 8px;}
+
         .action-menu { display: none; gap: 5px; align-items: center; }
         
         .action-menu .btn, .action-menu-default .btn-more {
@@ -71,7 +87,7 @@
         .form-group { margin-bottom: 0; }
         label { display: block; margin-bottom: 8px; font-weight: 600; color: #1e40af; }
         
-        select, input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        select, input[type="text"], input[type="number"], input[type="password"] { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
         
         #brandSelect { background-color: #fff7ed; border: 2px solid #fed7aa; color: #9a3412; font-weight: bold; }
         #searchProduct { margin-bottom: 10px; border: 1px solid #3b82f6; background-color: #f0f9ff; }
@@ -84,8 +100,8 @@
         .inventory-list { border: 1px solid #bfdbfe; border-radius: 8px; overflow: visible; background: white; height: auto; }
         .inventory-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid #bfdbfe; background: #fff; transition: background-color 0.2s; }
         .inventory-item:last-child { border-bottom: none; }
-        .inventory-item:nth-child(even) { background-color: #f8fafc; }
         .inventory-item.has-data { background-color: #dcfce7 !important; }
+        .inventory-item:nth-child(even) { background-color: #f8fafc; }
 
         .prod-thumb { width: 40px; height: 40px; object-fit: cover; border-radius: 4px; margin-right: 10px; border: 1px solid #ddd; background: #eee; cursor: zoom-in; }
         .prod-thumb-placeholder { width: 40px; height: 40px; display: inline-block; background: #f1f5f9; border-radius: 4px; margin-right: 10px; text-align: center; line-height: 40px; font-size: 12px; color: #ccc; }
@@ -99,9 +115,30 @@
         .item-input input { width: 60px; text-align: center; border: 1px solid #cbd5e1; }
 
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; overflow-y: auto; align-items: flex-start; justify-content: center; padding: 40px 0; }
-        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 700px; margin: 0 auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); height: auto; overflow: visible; }
+        .modal-content { background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 700px; margin: 0 auto; box-shadow: 0 10px 25px rgba(0,0,0,0.2); height: auto; overflow: visible; position: relative; }
         
-        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; position: sticky; top: -30px; background: white; z-index: 10; padding-top: 10px; padding-bottom: 10px; border-bottom: 2px solid #f3f4f6;}
+        /* 修改点4：修复设置页Header的UI Bug */
+        .modal-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; /* 确保垂直居中 */
+            margin-bottom: 20px; 
+            
+            /* 粘性定位 */
+            position: sticky; 
+            top: 0; 
+            background: white; 
+            z-index: 50; 
+            
+            /* 负边距抵消父容器Padding，实现吸顶无缝隙 */
+            margin-top: -30px;
+            margin-left: -30px;
+            margin-right: -30px;
+            
+            /* 内部补白 */
+            padding: 15px 30px;
+            border-bottom: 2px solid #f3f4f6;
+        }
         
         #settingsTitle { cursor: grab; user-select: none; transition: color 0.3s; margin: 0; align-self: center; display: flex; align-items: center;}
         #settingsTitle:active { cursor: grabbing; color: #2563eb; }
@@ -166,13 +203,17 @@
         .tag-history { background: #f1f5f9; color: #64748b; }
         
         /* 堆叠层级管理 */
-        #versionSelectModal, #logModal, #customDialogModal, #saveProcessModal { z-index: 3000; }
+        /* 修改点2：Loader 层级最高 */
+        #globalLoader { z-index: 9999; }
+        #toastContainer { z-index: 9998; }
+        #unsavedFloatBar { z-index: 9990; }
+        #versionSelectModal, #logModal, #customDialogModal, #saveProcessModal, #advancedSettingsModal, #passwordCheckModal { z-index: 3000; }
         
         #logList { list-style: none; padding: 0; max-height: 400px; overflow-y: auto; }
         #logList li { border-bottom: 1px solid #eee; padding: 10px; font-size: 0.9rem; }
         #logList .log-time { color: #888; font-size: 0.8rem; margin-bottom: 2px; }
 
-        #toastContainer { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        #toastContainer { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; }
         .toast-msg { background: rgba(0,0,0,0.8); color: white; padding: 10px 20px; border-radius: 25px; font-size: 0.9rem; animation: fadeUp 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 8px;}
         .toast-success { background: #10b981; }
         .toast-error { background: #ef4444; }
@@ -190,16 +231,60 @@
         
         .loading-container { padding: 40px; text-align: center; }
         .loading-text { font-size: 1.1rem; color: #555; margin-bottom: 20px; font-weight: bold;}
+
+        /* 高级设置相关样式 */
+        .advanced-section { border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #f8fafc; }
+        .advanced-title { font-weight: bold; margin-bottom: 10px; display: block; color: #334155; }
+        .password-row { display: flex; gap: 10px; }
+
+        /* 修改点2：初始全屏加载遮罩 */
+        #globalLoader { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(255,255,255,0.95); 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            transition: opacity 0.3s;
+        }
+
+        /* 修改点3：底部未保存提示条 */
+        .unsaved-float-bar {
+            display: none;
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            padding: 10px 20px;
+            border-radius: 50px;
+            align-items: center;
+            gap: 15px;
+            animation: slideUp 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            z-index: 9990; /* 确保在Modal之上 */
+        }
+        .unsaved-text { font-size: 0.9rem; font-weight: bold; color: #333; display: flex; align-items: center; gap: 6px;}
+        @keyframes slideUp { from { transform: translate(-50%, 50px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+
     </style>
 </head>
 <body>
 
+<div id="globalLoader">
+    <div class="spinner"></div>
+    <div class="loading-text">加载中...</div>
+</div>
+
 <div id="toastContainer"></div>
+
+<div id="unsavedFloatBar" class="unsaved-float-bar">
+    <div class="unsaved-text">⚠️ 已修改配置，是否同步到云端</div>
+    <button class="btn btn-close-green" style="padding: 6px 15px; font-size: 0.9rem;" onclick="saveSettingsToCloud(false)">同步</button>
+</div>
 
 <div class="container">
     <header>
         <h1>📦 库存盘点工具</h1>
-        <button class="btn btn-settings" onclick="openSettings()">⚙️ 设置</button>
+        <button class="btn btn-settings" onclick="checkPasswordAndOpen()">⚙️ 设置</button>
     </header>
 
     <div class="home-section">
@@ -239,21 +324,10 @@
 <div id="settingsModal" class="modal" style="display: none;">
     <div class="modal-content">
         
-        <div id="unsavedAlert" class="alert-box">
-            <div id="alertTitleText" class="alert-title">⚠️ 检测到配置有新的改动，是否保存到云端？</div>
-            <div class="alert-actions">
-                <button class="btn btn-cancel" onclick="forceCloseSettings()">🏠 返回主页 (暂不保存)</button>
-                <button class="btn btn-cloud-load" onclick="showVersionSelector()">🔄 恢复/加载云端</button>
-                <button class="btn btn-close-green" onclick="saveSettingsToCloud(true)">☁️ 保存到云端</button>
-            </div>
-        </div>
-
         <div class="modal-header">
             <h2 id="settingsTitle" draggable="true" title="按住拖拽到右侧按钮可导出操作日志">⚙️ 设置</h2>
             
             <div style="display: flex; align-items: center;">
-                <button class="btn btn-export-local" onclick="exportLocalConfig()" title="导出配置到本地文件">📤 导出配置</button>
-                <button class="btn btn-cloud-load" onclick="showVersionSelector()">☁️ 加载配置</button>
                 <button id="defaultCloseBtn" class="btn btn-close-green" onclick="checkAndClose()">💾 保存 / 关闭</button>
             </div>
         </div>
@@ -270,7 +344,7 @@
                 
                 <div class="item-actions-wrapper">
                     <div id="brandDefaultActions" style="display: block;">
-                         <button class="btn btn-more" onclick="toggleActionMenu(this)" style="display: inline-block;">⚙️</button>
+                         <button class="btn btn-more" onclick="toggleActionMenu(this)" style="display: inline-block;">⋮</button>
                          <div class="action-menu" style="display: none;">
                              <button class="btn btn-edit" onclick="renameCurrentBrand()">✏️</button>
                              <button class="btn btn-danger" onclick="showDeleteBrandConfirm()">🗑️</button>
@@ -294,6 +368,45 @@
                 <textarea id="newProductName" class="bulk-input" placeholder="输入商品名称 支持批量添加：一行一个商品"></textarea>
                 <button class="btn btn-add" onclick="addProduct()">添加<br>商品</button>
             </div>
+        </div>
+
+        <button class="btn btn-advanced" onclick="openAdvancedSettings()">🛠️ 高级功能 / 数据管理</button>
+    </div>
+</div>
+
+<div id="advancedSettingsModal" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+        <h3>🛠️ 高级设置</h3>
+        
+        <div class="advanced-section">
+            <span class="advanced-title">📂 配置管理</span>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-export-local" style="flex:1" onclick="exportLocalConfig()">📤 导出配置</button>
+                <button class="btn btn-cloud-load" style="flex:1" onclick="showVersionSelector()">☁️ 加载/历史</button>
+            </div>
+        </div>
+
+        <div class="advanced-section">
+            <span class="advanced-title">🔒 访问密码保护</span>
+            <div style="font-size:0.85rem; color:#666; margin-bottom:8px;">设置后，进入设置页面需要验证密码。留空保存则取消密码。</div>
+            <div class="password-row">
+                <input type="text" id="settingPasswordInput" placeholder="输入新密码...">
+                <button class="btn btn-save-mini" onclick="savePasswordProtection()">保存密码</button>
+            </div>
+        </div>
+
+        <button class="btn btn-cancel" style="width:100%; margin-top:10px;" onclick="document.getElementById('advancedSettingsModal').style.display='none'">关闭</button>
+    </div>
+</div>
+
+<div id="passwordCheckModal" class="modal">
+    <div class="modal-content" style="max-width: 350px; text-align: center;">
+        <h3>🔒 需要验证密码</h3>
+        <p>请先输入密码以进入设置页面</p>
+        <input type="password" id="passwordCheckInput" style="margin-bottom: 15px; text-align: center;">
+        <div style="display: flex; gap: 10px;">
+            <button class="btn btn-primary" onclick="verifyPassword()">验证</button>
+            <button class="btn btn-cancel" onclick="closePasswordCheck()">取消</button>
         </div>
     </div>
 </div>
@@ -354,22 +467,28 @@
 <input type="file" id="configFileInput" accept=".json" style="display:none" onchange="handleConfigImport(this)">
 
 <script>
-    const SUPABASE_URL = 'https://xlutfzstdxltvasnjmzq.supabase.co'; // 请在此填写
-    const SUPABASE_KEY = 'sb_publishable_bevWIETQac-lS6wQ7OnUnQ_DGbMmYvu';     // 请在此填写
+    // ============================================
+    // 请在此处填写您的 SUPABASE 配置信息
+    // ============================================
+    const SUPABASE_URL = 'https://xlutfzstdxltvasnjmzq.supabase.co'; // 例如: https://xyz.supabase.co
+    const SUPABASE_KEY = 'sb_publishable_bevWIETQac-lS6wQ7OnUnQ_DGbMmYvu'; // 以 eyJ 开头的长字符串
+    const BUCKET_NAME = 'Hysl-sp-imgs'; // 存储桶名称
+    // ============================================
     
     let supabaseClient = null;
-    if (typeof window.supabase !== 'undefined' && SUPABASE_URL.indexOf('YOUR_') === -1) {
+    if (typeof window.supabase !== 'undefined' && SUPABASE_URL.indexOf('您的_') === -1) {
         try {
             supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         } catch(e) { console.error("Supabase 初始化失败:", e); }
     }
 
     let inventoryData = {};
-    // 新增：品牌顺序数组，解决Object无序问题
     let brandOrder = [];
     let inventoryImages = {};
     let changeLog = []; 
     let sessionCounts = {};
+    let settingsPassword = ""; 
+
     const STORAGE_KEY = 'inventory_session_counts';
 
     let remoteFullData = { active: null, history: [] }; 
@@ -443,14 +562,28 @@
     }
 
     window.onload = function() {
+        // 显示加载动画
+        document.getElementById('globalLoader').style.display = 'flex';
+
         const savedSession = localStorage.getItem(STORAGE_KEY);
         if (savedSession) {
             try { sessionCounts = JSON.parse(savedSession); } catch(e) {}
         }
         renderBrandSelects();
-        if (supabaseClient) silentLoadLatest();
+        
+        // 如果有Supabase，则加载数据，否则隐藏动画
+        if (supabaseClient) {
+            silentLoadLatest();
+        } else {
+            document.getElementById('globalLoader').style.display = 'none';
+        }
+        
         document.getElementById('hiddenFileInput').addEventListener('change', handleFileSelect);
         initDragDrop();
+        
+        document.getElementById('passwordCheckInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') verifyPassword();
+        });
     };
 
     function initDragDrop() {
@@ -463,6 +596,20 @@
             e.preventDefault(); targetBtn.classList.remove('drag-over'); targetBtn.innerText = "💾 保存 / 关闭";
             if (e.dataTransfer.getData('text/plain') === 'log_export') exportChangeLog();
         });
+    }
+
+    // 修改点3：实时检测变动函数
+    function checkForChanges() {
+        // 计算当前数据的哈希
+        const currentHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages, p: settingsPassword });
+        const floatBar = document.getElementById('unsavedFloatBar');
+        
+        // 如果当前哈希与上次同步的哈希不一致，且没有加载历史存档，则显示悬浮条
+        if (currentHash !== lastSyncedHash && !isHistoryLoaded) {
+            floatBar.style.display = 'flex';
+        } else {
+            floatBar.style.display = 'none';
+        }
     }
 
     function cancelCurrentTask() {
@@ -502,7 +649,7 @@
     }
 
     function exportLocalConfig() {
-        const config = { inventoryData, brandOrder, inventoryImages, changeLog, exportedAt: new Date().toLocaleString() };
+        const config = { inventoryData, brandOrder, inventoryImages, changeLog, settingsPassword, exportedAt: new Date().toLocaleString() };
         const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `盘点配置备份_${new Date().toISOString().slice(0,10)}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -518,20 +665,21 @@
                 if (!config.inventoryData) throw new Error("无效的配置文件格式");
                 showCustomConfirm(`准备导入配置 (导出时间: ${config.exportedAt || '未知'})，这将覆盖当前设置，确定吗？`, () => {
                     inventoryData = config.inventoryData || {};
-                    // 兼容导入
-                    if(config.brandOrder) brandOrder = config.brandOrder;
-                    else brandOrder = Object.keys(inventoryData);
-                    
+                    if(config.brandOrder) brandOrder = config.brandOrder; else brandOrder = Object.keys(inventoryData);
                     inventoryImages = config.inventoryImages || {};
                     changeLog = config.changeLog || [];
+                    settingsPassword = config.settingsPassword || "";
+                    
                     currentBaseVersionTime = config.exportedAt || "本地导入";
                     renderBrandSelects();
                     document.getElementById('versionSelectModal').style.display = 'none';
+                    document.getElementById('advancedSettingsModal').style.display = 'none';
                     if(document.getElementById('settingsModal').style.display === 'flex') {
                         renderBrandTags();
                         if(currentSettingBrand) { if(inventoryData[currentSettingBrand]) loadProductsForSetting(); else selectSettingBrand(""); }
                     }
                     showToast("配置导入成功！请记得保存到云端。");
+                    checkForChanges(); // 检测变动
                 });
             } catch (err) { showToast("导入失败: " + err.message, "error"); }
         };
@@ -544,21 +692,32 @@
         const timeStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes()}`;
         changeLog.unshift({ time: timeStr, msg: msg });
         if(changeLog.length > 200) changeLog.pop();
+        
+        // 修改点3：每次记录操作后，检测变动
+        checkForChanges();
     }
     
     function checkAndClose() {
-        const currentHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
-        if (currentHash !== lastSyncedHash || isHistoryLoaded) {
-            const alertBox = document.getElementById('unsavedAlert');
-            document.getElementById('alertTitleText').innerText = isHistoryLoaded ? "⚠️ 您加载了历史存档，是否将其保存为最新版本？" : "⚠️ 检测到配置有新的改动，是否保存到云端？";
-            alertBox.style.display = 'flex';
-            document.querySelector('#settingsModal').scrollTop = 0;
-        } else { forceCloseSettings(); }
+        // 这里可以保留作为关闭按钮的逻辑
+        // 因为已经有了实时检测，这里主要负责关闭
+        const currentHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages, p: settingsPassword });
+        if (currentHash !== lastSyncedHash) {
+            // 如果还有未保存的变动，这里还是可以提醒一下，或者直接关闭让底部的条一直显示
+            // 现在的需求是底部条实时显示，所以这里我们直接强制关闭也是可以的，
+            // 但为了防止误操作，如果用户手动点关闭，还是弹个窗问一下或者直接保存并关闭更好？
+            // 保持原逻辑：如果有变动提醒，否则关闭
+            // 不过这次我们简单点：直接关闭，如果有变动底部的条会在。
+            // 但用户体验上，点了保存/关闭，应该期望保存。
+            // 让我们调用保存并关闭
+             saveSettingsToCloud(true);
+        } else { 
+            forceCloseSettings(); 
+        }
     }
 
     function forceCloseSettings() {
         document.getElementById('settingsModal').style.display = 'none';
-        document.getElementById('unsavedAlert').style.display = 'none';
+        // 隐藏底部条（虽然如果没变动本来就是隐藏的）
         isHistoryLoaded = false; 
         renderBrandSelects();
         if(currentBrand && !inventoryData[currentBrand]) { currentBrand = ""; document.getElementById('brandSelect').value = ""; toggleInventorySection(); }
@@ -572,10 +731,15 @@
                 processRemoteData(data.setting_value);
                 applyDataToApp(remoteFullData.active.data);
                 currentBaseVersionTime = remoteFullData.active.time || "未知版本";
-                lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
+                lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages, p: settingsPassword });
                 isHistoryLoaded = false;
             }
-        } catch (e) { console.error("Auto load failed", e); }
+        } catch (e) { 
+            console.error("Auto load failed", e); 
+        } finally {
+            // 修改点2：加载结束，隐藏遮罩
+            document.getElementById('globalLoader').style.display = 'none';
+        }
     }
 
     function processRemoteData(jsonValue) {
@@ -690,9 +854,12 @@
             isHistoryLoaded = true; 
         }
         applyDataToApp(targetData);
-        if (type === 'active') lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
+        if (type === 'active') lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages, p: settingsPassword });
         document.getElementById('versionSelectModal').style.display = 'none';
-        document.getElementById('unsavedAlert').style.display = 'none';
+        
+        // 重新检测变动状态
+        checkForChanges();
+
         if(document.getElementById('settingsModal').style.display === 'flex') { renderBrandTags(); if(currentSettingBrand) loadProductsForSetting(); }
         document.querySelector('#settingsModal').scrollTop = 0;
         showToast("已加载配置！");
@@ -700,19 +867,14 @@
 
     function applyDataToApp(dataObj) {
         if(dataObj.inventoryData) inventoryData = dataObj.inventoryData; else inventoryData = dataObj; 
-        
-        // 关键逻辑：如果云端有顺序，用云端的；如果没有，用 keys 生成
-        if(dataObj.brandOrder && Array.isArray(dataObj.brandOrder)) {
-            brandOrder = dataObj.brandOrder;
-        } else {
-            brandOrder = Object.keys(inventoryData);
-        }
-        // 确保一致性：如果有品牌在 Data 里但不在 Order 里，补上；如果在 Order 里但不在 Data 里，移除
+        if(dataObj.brandOrder && Array.isArray(dataObj.brandOrder)) brandOrder = dataObj.brandOrder; else brandOrder = Object.keys(inventoryData);
         brandOrder = brandOrder.filter(b => inventoryData[b] !== undefined);
         Object.keys(inventoryData).forEach(b => { if(!brandOrder.includes(b)) brandOrder.push(b); });
-
+        
         if(dataObj.inventoryImages) inventoryImages = dataObj.inventoryImages; else inventoryImages = {};
         if (dataObj.changeLog) changeLog = dataObj.changeLog; else changeLog = [];
+        if (dataObj.settingsPassword) settingsPassword = dataObj.settingsPassword; else settingsPassword = "";
+        
         renderBrandSelects();
     }
 
@@ -724,13 +886,16 @@
 
         try {
             const nowTime = new Date().toLocaleString();
-            // 保存 brandOrder
-            const newDataPackage = { inventoryData, brandOrder, inventoryImages, changeLog, baseVersionTime: currentBaseVersionTime };
-            let newHistory = [...remoteFullData.history];
-            if (remoteFullData.active) newHistory.unshift(remoteFullData.active);
-            if (newHistory.length > 3) newHistory = newHistory.slice(0, 3);
-            const finalPayload = { active: { time: nowTime, data: newDataPackage }, history: newHistory };
+            const newDataPackage = { inventoryData, brandOrder, inventoryImages, changeLog, settingsPassword, baseVersionTime: currentBaseVersionTime };
             
+            let newHistory = [...remoteFullData.history];
+            if (remoteFullData.active) {
+                let historyVersion = JSON.parse(JSON.stringify(remoteFullData.active));
+                newHistory.unshift(historyVersion);
+            }
+            if (newHistory.length > 1) newHistory = newHistory.slice(0, 1);
+            
+            const finalPayload = { active: { time: nowTime, data: newDataPackage }, history: newHistory };
             const { error } = await supabaseClient.from('hysl-ckpd-data').upsert({ setting_key: 'main_data', setting_value: finalPayload });
             
             if (taskAbortFlag) return;
@@ -738,14 +903,19 @@
 
             remoteFullData = finalPayload;
             currentBaseVersionTime = nowTime; 
-            lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages });
+            // 更新Hash
+            lastSyncedHash = JSON.stringify({ d: inventoryData, o: brandOrder, i: inventoryImages, p: settingsPassword });
             changeLog = []; 
             
             isHistoryLoaded = false; 
             document.getElementById('saveProcessModal').style.display = 'none';
             showToast("保存成功！");
+            
+            // 修改点3：保存成功后，重新检测（悬浮条会消失）
+            checkForChanges();
+
             if (closeAfterSave) forceCloseSettings();
-            else document.getElementById('unsavedAlert').style.display = 'none';
+            
         } catch (err) { 
             if (!taskAbortFlag) {
                 document.getElementById('saveProcessModal').style.display = 'none';
@@ -892,9 +1062,33 @@
         } catch (error) { console.error(error); showToast("导出失败：" + error.message, "error"); }
     }
 
+    function checkPasswordAndOpen() {
+        if (settingsPassword && settingsPassword.trim() !== "") {
+            document.getElementById('passwordCheckModal').style.display = 'flex';
+            document.getElementById('passwordCheckInput').value = '';
+            document.getElementById('passwordCheckInput').focus();
+        } else {
+            openSettings();
+        }
+    }
+
+    function verifyPassword() {
+        const input = document.getElementById('passwordCheckInput').value;
+        if (input === settingsPassword) {
+            document.getElementById('passwordCheckModal').style.display = 'none';
+            openSettings();
+        } else {
+            showToast("密码错误", "error");
+        }
+    }
+
+    function closePasswordCheck() {
+        document.getElementById('passwordCheckModal').style.display = 'none';
+    }
+
     function openSettings() {
         document.getElementById('settingsModal').style.display = 'flex';
-        document.getElementById('unsavedAlert').style.display = 'none';
+        // 不再隐藏unsavedAlert，因为它已经被移除了
         renderBrandTags();
         const brandListEl = document.getElementById('brandTags');
         if(!brandSortable && typeof Sortable !== 'undefined') {
@@ -902,24 +1096,39 @@
         }
         if(currentSettingBrand) selectSettingBrand(currentSettingBrand);
         else document.getElementById('productManageSection').style.display = 'none';
+        
+        // 打开设置页时也检查一下
+        checkForChanges();
+    }
+
+    function openAdvancedSettings() {
+        document.getElementById('advancedSettingsModal').style.display = 'flex';
+        document.getElementById('settingPasswordInput').value = settingsPassword;
+    }
+
+    function savePasswordProtection() {
+        const newVal = document.getElementById('settingPasswordInput').value.trim();
+        if (newVal !== settingsPassword) {
+            settingsPassword = newVal;
+            logAction(newVal ? "设置/修改了访问密码" : "取消了访问密码");
+            showToast(newVal ? "密码已保存 (请记得保存到云端生效)" : "密码保护已取消");
+            // 修改点3：密码变更也触发检测
+            checkForChanges();
+        } else {
+            showToast("密码未变更");
+        }
     }
 
     function renderBrandSelects() {
-        // 使用 brandOrder 来渲染
+        const brands = Object.keys(inventoryData);
         const mainSelect = document.getElementById('brandSelect');
         const settingSelect = document.getElementById('settingBrandSelect');
         const currentMainVal = mainSelect.value;
-        
         let optionsHTML = '<option value="">-- 请选择品牌 --</option>';
-        // 遍历 brandOrder
         brandOrder.forEach(b => { 
-            // 双重保险：确保数据里真有这个品牌
             if(inventoryData[b] !== undefined) optionsHTML += `<option value="${b}">${b}</option>`; 
         });
-        
-        mainSelect.innerHTML = optionsHTML;
-        settingSelect.innerHTML = optionsHTML;
-        
+        mainSelect.innerHTML = optionsHTML; settingSelect.innerHTML = optionsHTML;
         if(brandOrder.includes(currentMainVal)) mainSelect.value = currentMainVal;
         if(document.getElementById('settingsModal').style.display === 'flex') renderBrandTags();
         toggleInventorySection();
@@ -928,7 +1137,6 @@
     function renderBrandTags() {
         const container = document.getElementById('brandTags');
         container.innerHTML = '';
-        // 遍历 brandOrder
         brandOrder.forEach(brand => {
             if(inventoryData[brand] !== undefined) {
                 const tag = document.createElement('div');
@@ -968,12 +1176,10 @@
         const name = input.value.trim();
         if (!name) return;
         if (Object.prototype.hasOwnProperty.call(inventoryData, name)) return showToast("品牌名称已存在", "error");
-        
         isAddingBrandLock = true;
         inventoryData[name] = [];
-        brandOrder.push(name); // 存入顺序
+        brandOrder.push(name);
         logAction(`添加品牌: ${name}`);
-        
         renderBrandSelects(); renderBrandTags(); selectSettingBrand(name);
         setTimeout(() => { document.getElementById('newBrandInput')?.focus(); isAddingBrandLock = false; }, 300);
     }
@@ -996,8 +1202,7 @@
         const brand = currentSettingBrand;
         if (!brand) return;
         delete inventoryData[brand];
-        brandOrder = brandOrder.filter(b => b !== brand); // 从顺序中删除
-        
+        brandOrder = brandOrder.filter(b => b !== brand);
         if(inventoryImages[brand]) delete inventoryImages[brand];
         if(sessionCounts[brand]) delete sessionCounts[brand];
         logAction(`删除品牌: ${brand}`);
@@ -1014,12 +1219,9 @@
         showCustomPrompt("请输入新的品牌名称", oldName, (newName) => {
             if (newName && newName !== oldName) {
                 if (inventoryData[newName]) return showToast("该品牌名称已存在！", "error");
-                
                 inventoryData[newName] = inventoryData[oldName]; delete inventoryData[oldName];
-                // 更新顺序
                 const idx = brandOrder.indexOf(oldName);
                 if(idx !== -1) brandOrder[idx] = newName;
-                
                 if (inventoryImages[oldName]) { inventoryImages[newName] = inventoryImages[oldName]; delete inventoryImages[oldName]; }
                 if (sessionCounts[oldName]) { sessionCounts[newName] = sessionCounts[oldName]; delete sessionCounts[oldName]; }
                 logAction(`重命名品牌: ${oldName}->${newName}`);
@@ -1064,7 +1266,7 @@
                     </div>
                     <div class="item-actions-wrapper">
                         <div class="action-menu-default">
-                            <button class="btn btn-more" onclick="toggleActionMenu(this)">⚙️</button>
+                            <button class="btn btn-more" onclick="toggleActionMenu(this)">⋮</button>
                             <div class="action-menu">
                                 <button class="btn btn-img-upload" style="${imgBtnStyle}" onclick="triggerUpload('${brand}', ${index})" title="上传/修改图片">${imgBtnText}</button>
                                 <button class="btn btn-edit" onclick="enableProductEdit(this, '${brand}', ${index})" title="编辑">✏️</button>
@@ -1185,17 +1387,17 @@
         if(lis[index]) { const closeBtn = lis[index].querySelector('.btn-cancel-mini'); if(closeBtn) closeActionMenu(closeBtn); }
     }
 
-    // 2. 修改：调整压缩 (300px, 0.5)
     function handleFileSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
+        
         const reader = new FileReader();
         reader.onload = function(e) {
             const img = new Image();
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                // 300px
+                
                 const maxWidth = 300; 
                 const maxHeight = 300;
                 let width = img.width;
@@ -1208,16 +1410,57 @@
                 canvas.width = width;
                 canvas.height = height;
                 ctx.drawImage(img, 0, 0, width, height);
-                // 0.5 画质
-                const base64 = canvas.toDataURL('image/jpeg', 0.5);
                 
-                const brand = pendingUploadBrand;
-                const index = pendingUploadIndex;
-                const prodName = inventoryData[brand][index];
-                if (!inventoryImages[brand]) inventoryImages[brand] = {};
-                inventoryImages[brand][prodName] = base64;
-                logAction(`更新图片: ${brand}-${prodName}`);
-                loadProductsForSetting();
+                canvas.toBlob(async (blob) => {
+                    const brand = pendingUploadBrand;
+                    const index = pendingUploadIndex;
+                    const prodName = inventoryData[brand][index];
+
+                    if (!supabaseClient) return showToast("未配置数据库连接，无法上传", "error");
+                    
+                    showToast("正在上传图片...", "success");
+
+                    const rawName = brand + prodName;
+                    
+                    let pinyinArr = pinyinPro.pinyin(rawName, { 
+                        pattern: 'first', 
+                        toneType: 'none', 
+                        type: 'array' 
+                    });
+                    
+                    const cleanName = pinyinArr.join('').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                    
+                    const filePath = cleanName + ".jpg";
+
+                    const { data, error } = await supabaseClient
+                        .storage
+                        .from(BUCKET_NAME)
+                        .upload(filePath, blob, { 
+                            contentType: 'image/jpeg',
+                            upsert: true 
+                        });
+
+                    if (error) {
+                        console.error("上传详细错误:", error);
+                        showToast("上传失败: " + (error.message || error.error), "error");
+                        return;
+                    }
+
+                    const { data: { publicUrl } } = supabaseClient
+                        .storage
+                        .from(BUCKET_NAME)
+                        .getPublicUrl(filePath);
+
+                    const finalUrl = publicUrl + "?t=" + new Date().getTime();
+                    
+                    if (!inventoryImages[brand]) inventoryImages[brand] = {};
+                    inventoryImages[brand][prodName] = finalUrl;
+                    
+                    logAction(`更新图片: ${brand}-${prodName}`);
+                    loadProductsForSetting();
+                    showToast("图片上传成功！");
+                    
+                }, 'image/jpeg', 0.5); 
             };
             img.src = e.target.result;
         };
